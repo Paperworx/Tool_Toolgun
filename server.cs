@@ -12,11 +12,14 @@ if (isFile("Add-Ons/System_ReturnToBlockland/server.cs")) {
 	if (!$RTB::RTBR_ServerControl_Hook)
 		exec("Add-Ons/System_ReturnToBlockland/RTBR_ServerControl_Hook.cs");
 	
-	RTB_registerPref("Replace Wrench", "Toolgun", "$Pref::Server::Toolgun::ReplaceWrench", "bool", "Tool_Toolgun", 1, false, false);
+	RTB_registerPref("Replace wrench on spawn", "Toolgun", "$Pref::Server::Toolgun::ReplaceWrench", "bool", "Tool_Toolgun", 1, false, false);
 } else {
 	if ($Pref::Server::Toolgun::ReplaceWrench $= "")
 		$Pref::Server::Toolgun::ReplaceWrench = true;
 }
+
+$Toolgun::Modes = 2;
+$Toolgun::HighlightMS = 250;
 
 function determineNearestColor(%color) {
 	for (%i = 0; %i < 64; %i++) {
@@ -46,6 +49,8 @@ function FxDTSBrick::toolgunFinish(%this, %mode) {
 					%this.colorVehicle();
 			case 2: // delete
 				%this.delete();
+			default:
+				error("Invalid toolgun mode.");
 		}
 	}
 }
@@ -70,14 +75,27 @@ function serverCmdToolgun(%client) {
 	if (!isObject(%player = %client.player))
 		return;
 	
-	if (%client.minigame !$= "" && !%client.isAdmin)
+	if (isObject(%client.minigame) && !%client.isAdmin)
 		return;
 	
 	%player.updateArm("toolgunImage");
 	%player.mountImage("toolgunImage", 0);
+	
+	%player.toolgunMode = 1;
+	%player.updateToolgunStatus();
+	
+	return %player;
 }
 
-function serverCmdtg(%client) { serverCmdToolgun(%client); }
+function serverCmdTG(%client) { serverCmdToolgun(%client); }
+
+function serverCmdDel(%client) { // for people who were used to the del launcher
+	if (!isObject(%player = serverCmdToolgun(%client)))
+		return;
+	
+	%player.toolgunMode = 2;
+	%player.updateToolgunStatus();
+}
 
 datablock ItemData(toolgunItem : wrenchItem) {
 	shapeFile 			= "./toolgun.dts";
@@ -101,17 +119,15 @@ datablock ShapeBaseImageData(toolgunImage : wrenchImage) {
 	item				= toolgunItem;
 };
 
-function toolgunImage::onFire(%this, %obj, %slot) { // i really need to redo this part entirely at some point
+function toolgunImage::onFire(%this, %obj, %slot) { // i should redo this part entirely at some point
 	%eye = %obj.getEyePoint();
 	%vec = vectorAdd(%eye, vectorScale(%obj.getEyeVector(), 500));
 	%mask = $TypeMasks::FxBrickAlwaysObjectType | $TypeMasks::FxBrickObjectType;
 	%ray = containerRayCast(%eye, %vec, %mask, %obj);
 	%col = firstWord(%ray);
 	
-	if (getRandom(1, 2) == 1)
-		%obj.playAudio(1, "toolgun_Fire_1");
-	else
-		%obj.playAudio(2, "toolgun_Fire_2");
+	%rand = getRandom(0, 1) ? 1 : 2;
+	%obj.playAudio(%rand, "toolgun_Fire_" @ %rand);
 	
 	%obj.playThread(2, "shiftAway");
 	
@@ -130,11 +146,13 @@ function toolgunImage::onFire(%this, %obj, %slot) { // i really need to redo thi
 			case 2: // delete
 				%trustReq = 2;
 				%color = "1 0 0 1";
+			default:
+				error("Invalid toolgun mode.");
 		}
 		
 		%trustLvl = getTrustLevel(%col, %obj);
 		
-		if (%trustLvl < %trustReq && !%client.isAdmin) {
+		if ((%trustLvl < %trustReq) && !%client.isAdmin) {
 			%group = %col.getGroup();
 			%brickgroup = %group.getName();
 			%bl_id = %brickgroup.bl_id;
@@ -150,7 +168,7 @@ function toolgunImage::onFire(%this, %obj, %slot) { // i really need to redo thi
 		%col.setColor(determineNearestColor(%color));
 		%col.setColorFx(3);
 		
-		%col.schedule(150, "toolgunFinish", %obj.toolgunMode);
+		%col.schedule($Toolgun::HighlightMS, "toolgunFinish", %obj.toolgunMode);
 	}
 }
 
@@ -187,15 +205,14 @@ package toolgunPackage {
 		Parent::spawnPlayer(%this);
 		
 		if ($Pref::Server::Toolgun::ReplaceWrench) {
-			if (!isObject(%player = %this.player))
-				return;
-			
-			%toolgunID = toolgunItem.getID();
-			
-			for (%i = 0; %i < %player.getDatablock().maxTools; %i++) {
-				if (%player.tool[%i] == wrenchItem.getID()) {
-					%player.tool[%i] = %toolgunID;
-					messageClient(%this, 'MsgItemPickup', '', %i, %toolgunID);
+			if (isObject(%player = %this.player)) {
+				%toolgunID = toolgunItem.getID();
+				
+				for (%i = 0; %i < %player.getDatablock().maxTools; %i++) {
+					if (%player.tool[%i] == wrenchItem.getID()) {
+						%player.tool[%i] = %toolgunID;
+						messageClient(%this, 'MsgItemPickup', '', %i, %toolgunID);
+					}
 				}
 			}
 		}
@@ -206,7 +223,7 @@ package toolgunPackage {
 			if (%player.getMountedImage(0) == toolgunImage.getID()) {
 				%player.toolgunMode++;
 				
-				if (%player.toolgunMode > 2)
+				if (%player.toolgunMode > $Toolgun::Modes)
 					%player.toolgunMode = 1;
 				
 				%player.updateToolgunStatus();
