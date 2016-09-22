@@ -111,10 +111,12 @@ datablock ItemData(toolgunItem : wrenchItem) {
 datablock ShapeBaseImageData(toolgunImage : wrenchImage) {
 	shapeFile 			= "./toolgun.dts";
 	
-	offset				= "-0.02 -0.015 -0.02";
-	eyeOffset			= "0 0 0";
+	offset				= "-0.02 0 -0.02";
+	eyeOffset			= "0.5 0.6 -0.7";
 	
 	doColorShift		= false;
+	
+	stateTimeoutValue[3] = 0.18;
 	
 	item				= toolgunItem;
 };
@@ -127,6 +129,7 @@ function toolgunImage::onFire(%this, %obj, %slot) { // i should redo this part e
 	%col = firstWord(%ray);
 	
 	%rand = getRandom(0, 1) ? 1 : 2;
+	%obj.stopAudio(%rand);
 	%obj.playAudio(%rand, "toolgun_Fire_" @ %rand);
 	
 	%obj.playThread(2, "shiftAway");
