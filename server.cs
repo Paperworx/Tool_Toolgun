@@ -271,8 +271,9 @@ function toolgunImage::onFire(%image, %obj, %slot) {
           }
         }
         
+        %trustReq = 1;
+        
         if(!%dont) {
-          %trustReq = 1;
           %color = "1 1 0 1";
         }
 		}
