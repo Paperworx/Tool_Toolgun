@@ -267,6 +267,7 @@ function toolgunImage::onFire(%image, %obj, %slot) {
         for(%i = 0; %i < %col.numEvents; %i++) {
           if(%col.eventOutput[%i] $= "setColor" || %col.eventOutput[%i] $= "setColorFx") {
             %dont = true;
+            break;
           }
         }
         
@@ -334,14 +335,14 @@ if(isPackage(toolgunPackage))
 
 package toolgunPackage {
 	
-	function GameConnection::onDeath(%client) {
+	function GameConnection::onDeath(%client, %sourceObject, %sourceClient, %damageType, %damageLoc) {
 		if(isObject(%player = %client.player)) {
 			if(%player.getMountedImage(0) == toolgunImage.getID()) {
 				%client.bottomPrint("", 0, true);
       }
     }
 		
-		parent::onDeath(%client);
+		parent::onDeath(%client, %sourceObject, %sourceClient, %damageType, %damageLoc);
 	}
 	
 	function GameConnection::spawnPlayer(%client) {
